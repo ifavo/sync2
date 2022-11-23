@@ -90,6 +90,7 @@ import { randomBytes } from 'crypto'
 import ErrorTip from './ErrorTip.vue'
 import WarningListDialog from './WarningListDialog.vue'
 import InspectClauseDialog from './InspectClauseDialog.vue'
+import Contract from '../MultiSig/const'
 
 export default Common.extend({
     components: { PageToolbar, PageContent, PageAction, SignerSelector, PrioritySelector, GasFeeBar, ClauseCard, ErrorTip },
@@ -141,23 +142,27 @@ export default Common.extend({
         },
         thor(): Connex.Thor { return this.$svc.bc(this.gid).thor },
         estimation(): EstimateGasResult | null {
-            if (this.delayedEstimation && this.delayedEstimation.caller === this.signer) {
+            if (this.delayedEstimation && (this.delayedEstimation.caller === (this.isMultiSig ? this.multiSigOwner.signer : this.signer))) {
                 return this.delayedEstimation
             }
             return null
+        },
+        isMultiSig(): boolean {
+            return !!(this.wallet && this.wallet.meta.type === 'multisig')
         }
     },
     asyncComputed: {
         // the result may not match the current signer
         delayedEstimation(): Promise<EstimateGasResult | null> {
-            if (!this.wallet) {
+            if (!this.wallet || (this.isMultiSig && !this.multiSigOwner.wallet)) {
                 return Promise.resolve(null)
             }
+
             return estimateGas(
                 this.thor,
-                this.req.message,
+                this.isMultiSig ? this.multiSigClauses(this.req.message) : this.req.message,
                 this.req.options.gas || 0,
-                this.signer,
+                this.isMultiSig ? this.multiSigOwner.signer : this.signer,
                 this.req.options.delegator && this.req.options.delegator.signer)
         },
         tokens: {
@@ -174,7 +179,7 @@ export default Common.extend({
             if (!est || !fee || isDelegation) {
                 return null
             }
-            const signer = this.signer
+            const signer = this.isMultiSig ? this.multiSigOwner.signer : this.signer
             const gasPayer = (this.req.options.delegator && this.req.options.delegator.signer) || signer
             const acc = await this.thor.account(gasPayer).get()
 
@@ -199,6 +204,27 @@ export default Common.extend({
         },
         async isDelegation(): Promise<boolean> {
             return this.hasDelegator()
+        },
+        async multiSigOwner(): Promise<{wallet: M.Wallet | null, signer: string}> {
+            if (!this.wallet) {
+                return { wallet: this.wallet, signer: this.signer }
+            }
+
+            const { decoded: { 0: owners } } = await this.thor
+                .account(this.wallet.meta.addresses[0])
+                .method(Contract.getOwners)
+                .call()
+
+            const wallets = await this.$svc.wallet.getByGid(this.wallet.gid)
+            for (const wallet of wallets) {
+                for (const signer of wallet.meta.addresses) {
+                    if (owners.includes(signer)) {
+                        return { wallet, signer }
+                    }
+                }
+            }
+
+            return { wallet: this.wallet, signer: this.signer }
         }
     },
     methods: {
@@ -219,15 +245,32 @@ export default Common.extend({
                 noAction: true
             })
         },
+        multiSigClauses(clauses: Connex.VM.Clause[]): Transaction.Clause[] {
+            if (!this.wallet) {
+                return clauses as Transaction.Clause[]
+            }
+            return clauses.map(({ to, value = 0, data = '0x' }) => {
+                const hexValue = '0x' + new BigNumber(value).toString(16)
+                return {
+                    to: this.wallet!.meta.addresses[0],
+                    value: 0,
+                    data: this.thor.account(this.wallet!.meta.addresses[0])
+                        .method(Contract.submitTransaction)
+                        .asClause(to || '0x0000000000000000000000000000000000000000', hexValue, data)
+                        .data
+                }
+            })
+        },
         async onClickSign() {
             const est = this.estimation
-            const wallet = this.wallet
-            const signer = this.signer
+            const wallet = this.isMultiSig ? this.multiSigOwner.wallet : this.wallet
+            const signer = this.isMultiSig ? this.multiSigOwner.signer : this.signer
 
             if (!est || !wallet) {
                 return
             }
 
+            // @TODO: favo: estimate based on multi-sig interaction
             if (est.reverted) {
                 await this.$dialog({
                     component: WarningListDialog,
@@ -239,19 +282,19 @@ export default Common.extend({
             let tx!: Transaction
             let delegatorSig: Buffer | undefined
 
+            const clauses = this.req.message.map(item => ({
+                to: item.to,
+                value: '0x' + new BigNumber(item.value).toString(16),
+                data: item.data || '0x'
+            }))
+
             const originSig = await this.signTx(wallet, signer, () => {
                 // compose the tx body
                 const txBody: Transaction.Body = {
                     chainTag: Number.parseInt(this.thor.genesis.id.slice(-2), 16),
                     blockRef: this.thor.status.head.id.slice(0, 18),
                     expiration: 18, // about 3 mins
-                    clauses: this.req.message.map(item => {
-                        return {
-                            to: item.to,
-                            value: '0x' + new BigNumber(item.value).toString(16),
-                            data: item.data || '0x'
-                        }
-                    }),
+                    clauses: this.isMultiSig ? this.multiSigClauses(clauses) : clauses,
                     gasPriceCoef: this.gasPriceCoef,
                     gas: est.gas,
                     dependsOn: this.req.options.dependsOn || null,

@@ -28,6 +28,7 @@ export default {
         required_field: 'This field is required',
         something_wrong: 'Something is wrong',
         no_wallet: 'No wallet created yet',
+        no_multisig_support: 'Not supported by Multi-Signature-Wallets',
         invalid_input: 'Invalid input',
 
         // notify
@@ -90,10 +91,42 @@ export default {
         mnemonic_words_count: 'Mnemonic words count',
         action_generate: 'Generate',
         action_import: 'Import',
+        action_multisig: 'Add or import Multi-Signature-Wallet',
         label_wallet_name: 'Wallet Name',
         label_mnemonic: 'Please enter your mnemonic words',
         label_ledger_user: 'Ledger user?',
         action_ledger_link: 'Link Now'
+    },
+    newMultiSig: {
+        title: 'New Multi-Signature-Wallet',
+        baseName: 'New MultiSig',
+        action_deploy: 'Deploy',
+        action_import: 'Import',
+        tx_deploy_title: 'Deploy new Multi-Signature-Contract',
+        msg_deploying: 'Deploying new Multi-Signature-Wallet',
+        msg_deployment_failed: 'Deployment failed, please check the deployment transaction',
+        msg_intro: 'A Multi-Signature-Wallet is a Smart Contract deployed on the network. Initially it will have one owner (the address you sign the deployment with). You need to add more owners after deployment.',
+        label_address: 'Multi-Signature-Address',
+        msg_invalid_address: 'Please enter a valid address',
+        msg_invalid_address_checksum: 'Address checksum failed'
+    },
+    ownerMultiSig: {
+        title: 'Manage Owners',
+        title_owners: 'List of Owners',
+        title_add_dialog: 'Add Owner',
+        title_change_required_confirmations: 'Change required confirmations',
+        required_confirmations: 'Number of owners to required to confirm transactions',
+        action_manage_owner: 'Wallet Owners',
+        msg_owner_added: 'Owner added',
+        msg_owner_deleted: 'Owner deleted',
+        msg_owner_existed: 'Owner already exists',
+        msg_delete: 'Are you sure you want to delete the owner?'
+    },
+    transactionsMultiSig: {
+        title: 'Transactions',
+        action_confirm_transaction: 'Confirm Transaction',
+        action_revoke_confirmation: 'Revoke Confirmation',
+        action_execute_transaction: 'Execute Transaction'
     },
     authenticationDialog: {
         title: 'Authenticate',
@@ -133,7 +166,9 @@ export default {
     address: {
         title: 'Address',
         label_assets: 'Assets',
-        action_receive: 'Receive'
+        action_receive: 'Receive',
+        label_transactions: 'Transactions',
+        label_multisig_transactions: 'Multi-Sig-Transactions'
     },
     asset: {
         title: 'Asset',

@@ -10,6 +10,19 @@
                     :address="address"
                     :name="wallet.meta.name"
                 />
+                <q-btn
+                    v-if="wallet.meta.type === 'multisig'" unelevated class="full-width" :to="{
+                        name: 'transactions-multisig',
+                        params: {
+                            walletId: String(wallet.id),
+                            addressIndex: addressIndex
+                        }
+                    }">
+                    <q-item-section>
+                        <q-item-label>{{multiSigTransactionCount}} {{ $t('address.label_multisig_transactions') }}</q-item-label>
+                    </q-item-section>
+                </q-btn>
+
                 <q-item dense>
                     <q-item-section>
                         <q-item-label header>
@@ -79,6 +92,7 @@ import HeadItem from './HeadItem.vue'
 import AsyncResolve from 'components/AsyncResolve'
 import PageToolbar from 'components/PageToolbar.vue'
 import PageContent from 'components/PageContent.vue'
+import Contract from '../MultiSig/const'
 
 export default Vue.extend({
     components: {
@@ -95,6 +109,21 @@ export default Vue.extend({
     asyncComputed: {
         wallet(): Promise<M.Wallet | null> {
             return this.$svc.wallet.get(parseInt(this.walletId))
+        },
+        multiSigTransactionCount: {
+            async get(): Promise<string> {
+                if (!this.wallet) {
+                    return '0'
+                }
+
+                const { decoded: { 0: count } } = await this.thor
+                    .account(this.wallet.meta.addresses[0])
+                    .method(Contract.getTransactionCount)
+                    .call()
+
+                return count
+            },
+            default: '0'
         },
         tokenList: {
             async get(): Promise<M.TokenSpec[]> {
@@ -114,7 +143,8 @@ export default Vue.extend({
     computed: {
         address(): string {
             return this.wallet ? this.wallet.meta.addresses[parseInt(this.addressIndex)] : ''
-        }
+        },
+        thor(): Connex.Thor { return this.$svc.bc(this.wallet!.gid).thor }
     }
 })
 </script>
